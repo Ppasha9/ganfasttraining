@@ -1,0 +1,2 @@
+from .dense_autoencoder import DenseAutoEncoder
+from .variational_autoencoder import VariationalAutoEncoder
