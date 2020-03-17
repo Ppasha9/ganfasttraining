@@ -1,1 +1,1 @@
-from .mnist import get_dataset as get_mnist_dataset
+from .mnist import get_dataset_rescaled as get_mnist_dataset_rescaled
