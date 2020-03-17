@@ -15,7 +15,7 @@ from keras.layers.merge import _Merge
 from keras.layers.convolutional import Conv2D, UpSampling2D, ZeroPadding2D
 from keras.layers.normalization import BatchNormalization
 from keras.layers.advanced_activations import LeakyReLU
-from keras.optimizers import RMSprop
+from tensorflow.keras.optimizers import RMSprop
 from keras import backend as K
 
 from functools import partial
@@ -31,7 +31,7 @@ np.random.seed(30)
 class RandomWeightedAverage(_Merge):
     """Provides a (random) weighted average between real and generated image samples"""
     def _merge_function(self, inputs):
-        alpha = K.random_uniform((32, 1, 1, 1))
+        alpha = K.random_uniform((settings.BATCH_SIZE, 1, 1, 1))
         return (alpha * inputs[0]) + ((1 - alpha) * inputs[1])
 
 
@@ -59,7 +59,7 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         self.pics_output_dir = settings.OUTPUT_DIR
         self.checkpoint_dir = settings.CHECKPOINT_DIR
         self.critic_iters = settings.CRITIC_UPDATES_ITERS
-        self.wp_weight = settings.GP_WEIGHT
+        self.gp_weight = settings.GP_WEIGHT
         self.latent_dim = settings.LATENT_DIM
 
         self.sample_interval = settings.SAMPLE_INTERVAL
@@ -91,6 +91,8 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         # ===== Construct Computational Graph for the Critic =====
 
         # freeze generator layers while training the critic
+        for layer in self.generator.layers:
+            layer.trainable = False
         self.generator.trainable = False
 
         # real image sample
@@ -110,10 +112,10 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         # Determine validity of weighted sample
         weighted_validity = self.critic(interpolated_img)
 
-        partial_gp_loss = partial(gp_loss, averaged_samples=interpolated_img)
+        partial_gp_loss = partial(gp_loss, averaged_samples=interpolated_img, gp_weight=self.gp_weight)
         partial_gp_loss.__name__ = 'gradient_penalty'
 
-        self.critic_model = Model([real_img_sample, z_noise_critic], [real_validity, fake_validity, weighted_validity])
+        self.critic_model = Model([real_img_sample, z_noise_critic], [real_validity, fake_validity, weighted_validity], name="WGAN_GP_Critic")
         self.critic_model.compile(optimizer=optimizer,
                                   loss_weights=[1, 1, 10],
                                   loss=[wasserstein_loss,
@@ -123,7 +125,11 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         # ===== Construct Computational Graph for the Generator =====
 
         # freeze critic's layers
+        for layer in self.critic.layers:
+            layer.trainable = False
         self.critic.trainable = False
+        for layer in self.generator.layers:
+            layer.trainable = True
         self.generator.trainable = True
 
         # Noise input for generator
@@ -133,7 +139,7 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         # Critic determines validity of generated images
         gen_img_validity = self.critic(generated_img)
 
-        self.generator_model = Model(z_noise_gen, gen_img_validity)
+        self.generator_model = Model(z_noise_gen, gen_img_validity, name="WGAN_GP_Generator")
         self.generator_model.compile(optimizer=optimizer, loss=wasserstein_loss)
 
     def _make_generator(self):
@@ -209,9 +215,9 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         self.x_fid_test = tf.convert_to_tensor(x_fid_test, dtype=tf.float32)
 
         # adversarial ground truth
-        valid = -np.ones((self.batch_size, 1))
-        fake = np.ones((self.batch_size, 1))
-        dummy = np.zeros((self.batch_size, 1))   # dummy for gradient penalty
+        valid = -np.ones((self.batch_size, 1), dtype=np.float32)
+        fake = np.ones((self.batch_size, 1), dtype=np.float32)
+        dummy = np.zeros((self.batch_size, 1), dtype=np.float32)   # dummy for gradient penalty
 
         epoch = 0
         self.start_train_time = time.time()
@@ -221,8 +227,8 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
                 # ==== Train Critic ====
 
                 # random batch of images
-                idx = np.random.randint(0, x_train.shape[0], self.batch_size)
-                imgs = x_train[idx]
+                idx = np.random.randint(0, self.x_train.shape[0], self.batch_size)
+                imgs = self.x_train[idx]
 
                 # generated noise
                 noise = np.random.normal(0, 1, (self.batch_size, self.latent_dim))
@@ -251,6 +257,8 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
                 wgan_gp_logger.info("Save checkpoint on %d epoch" % epoch)
                 self.save_checkpoint(epoch)
 
+            epoch += 1
+
     def _gen_images_from_random_codes(self, r, c):
         noise = np.random.normal(0, 1, (r * c, self.latent_dim))
         gen_imgs = self.generator.predict(noise)
@@ -278,7 +286,7 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         generated_images = self.generator.predict(np.random.normal(size=(len(self.x_fid_test), self.latent_dim)))
         generated_images = tf.convert_to_tensor(generated_images, dtype=tf.float32)
 
-        return util.mnist_frechet_distance(self.x_fid_test, generated_images)
+        return util.mnist_frechet_distance(self.x_fid_test, generated_images).numpy()
 
     def _save_sampled_images(self, dir_path):
         fig = self._gen_images_from_random_codes(10, 10)
@@ -291,8 +299,8 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         self.fid_score_list.append(self.cur_fid_dist)
         wgan_gp_logger.info("FID: %f" % self.cur_fid_dist)
 
-        dict_to_save["fid"] = self.cur_fid_dist
-        dict_to_save["time_spended"] = time.time() - self.start_train_time
+        dict_to_save["fid"] = str(self.cur_fid_dist)
+        dict_to_save["time_spended"] = str(time.time() - self.start_train_time)
         with open(os.path.join(dir_path, "vars.json"), "w") as f:
             json.dump(dict_to_save, f, indent=4)
 
@@ -312,12 +320,12 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         np.save(os.path.join(dir_path, "generator_loss.npy"), self.generator_loss_list)
 
         fig = plt.figure(figsize=(15, 15))
-        plt.imshow(np.asarray(self.critic_loss_list))
+        plt.plot(np.asarray(self.critic_loss_list))
         fig.savefig(os.path.join(dir_path, "critic_loss.png"))
         plt.close()
 
         fig = plt.figure(figsize=(15, 15))
-        plt.imshow(np.asarray(self.generator_loss_list))
+        plt.plot(np.asarray(self.generator_loss_list))
         fig.savefig(os.path.join(dir_path, "generator_loss.png"))
         plt.close()
 
@@ -325,7 +333,7 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
         np.save(os.path.join(dir_path, "fid_score.npy"), self.fid_score_list)
 
         fig = plt.figure(figsize=(15, 15))
-        plt.imshow(np.asarray(self.fid_score_list))
+        plt.plot(np.asarray(self.fid_score_list))
         fig.savefig(os.path.join(dir_path, "fid_score.png"))
         plt.close()
 

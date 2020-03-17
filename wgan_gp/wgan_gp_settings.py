@@ -10,7 +10,7 @@ IMG_COLS = 28
 IMG_CHANNELS = 1
 
 SAMPLE_INTERVAL = 10
-CHECKPOINT_INTERVAL = 50
+CHECKPOINT_INTERVAL = 30
 
 OUTPUT_DIR = os.path.join("result_pictures", "conv_wgan_gp")
 if not os.path.exists(OUTPUT_DIR):

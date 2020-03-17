@@ -10,16 +10,20 @@ config_dict = {
             "formatter": "myFormatter",
             "filename": "train_log.log",
         },
-        "loggers": {
-            "wgan_gp_logger": {
-                "handlers": ["fileHandler"],
-                "level": "INFO",
-            },
+        "consoleHandler": {
+            "class": "logging.StreamHandler",
+            "formatter": "myFormatter",
         },
-        "formatters": {
-            "myFormatter": {
-                "format": "%(asctime)s : [%(name)s] : [%(levelname)s] - %(message)s"
-            }
+    },
+    "loggers": {
+        "wgan_gp_logger": {
+            "handlers": ["fileHandler", "consoleHandler"],
+            "level": "INFO",
+        },
+    },
+    "formatters": {
+        "myFormatter": {
+            "format": "%(asctime)s : [%(name)s] : [%(levelname)s] - %(message)s"
         }
     }
 }
