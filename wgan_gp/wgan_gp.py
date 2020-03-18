@@ -316,7 +316,7 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
             self.num_of_good_epochs = 0
 
     def _save_generator_model(self, dir_path):
-        self.generator_model.save(filepath=os.path.join(dir_path, "generator_model.h5"))
+        self.generator.save(filepath=os.path.join(dir_path, "generator_model.h5"))
 
     def _save_loss_funcs(self, dir_path):
         np.save(os.path.join(dir_path, "critic_loss.npy"), self.critic_loss_list)

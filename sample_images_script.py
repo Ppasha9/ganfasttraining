@@ -19,7 +19,34 @@ import docopt
 
 import matplotlib.pyplot as plt
 
-from keras.models import load_model
+from keras.models import load_model, Sequential
+from keras.layers import Dense, Reshape, Conv2D, UpSampling2D, BatchNormalization, Activation
+from keras.layers.advanced_activations import LeakyReLU
+
+
+def _get_generator_model(latent_dim):
+        model = Sequential()
+
+        model.add(Dense(1024, input_dim=latent_dim))
+        model.add(LeakyReLU(alpha=0.2))
+
+        model.add(Dense(128 * 7 * 7))
+        model.add(Reshape((7, 7, 128), input_shape=(128 * 7 * 7,)))
+
+        model.add(UpSampling2D())
+        model.add(Conv2D(128, kernel_size=4, padding="same"))
+        model.add(BatchNormalization(momentum=0.8))
+        model.add(LeakyReLU(alpha=0.2))
+
+        model.add(UpSampling2D())
+        model.add(Conv2D(64, kernel_size=4, padding="same"))
+        model.add(BatchNormalization(momentum=0.8))
+        model.add(LeakyReLU(alpha=0.2))
+
+        model.add(Conv2D(1, kernel_size=4, padding="same"))
+        model.add(Activation("tanh"))
+
+        return model
 
 
 def _run(opts):
@@ -32,8 +59,10 @@ def _run(opts):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    model = load_model(model_path)
-    latent_dim = model.get_layer(index=0).input_shape[0]
+    latent_dim = 100
+    model = _get_generator_model(latent_dim)
+    model.load_weights(model_path)
+    
 
     pics_num = opts['--pics-num']
     pics_in_one_row = opts['--pics-size']
