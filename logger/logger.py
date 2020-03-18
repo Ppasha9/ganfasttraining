@@ -1,3 +1,4 @@
+import os
 import logging
 import logging.config
 
@@ -28,5 +29,7 @@ config_dict = {
     }
 }
 
+if os.path.exists("./train_log.log"):
+    os.remove("./train_log.log")
 logging.config.dictConfig(config_dict)
 wgan_gp_logger = logging.getLogger("wgan_gp_logger")

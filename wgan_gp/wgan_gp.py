@@ -206,48 +206,51 @@ class WGAN_GP_MODEL_FOR_MNIST(object):
 
     def train(self):
         # load dataset
-        x_train, _, _, _ = get_mnist_dataset_rescaled()
-        div_coeff = 5 / 6
-        train_num = int(len(x_train) * div_coeff)
-        _x_train, x_fid_test = x_train[:train_num - 1], x_train[train_num:]
+        x_train, _, x_test, _ = get_mnist_dataset_rescaled()
 
-        self.x_train = _x_train
-        self.x_fid_test = tf.convert_to_tensor(x_fid_test, dtype=tf.float32)
+        self.x_train = x_train
+        self.x_fid_test = tf.convert_to_tensor(x_test, dtype=tf.float32)
 
         # adversarial ground truth
         valid = -np.ones((self.batch_size, 1), dtype=np.float32)
         fake = np.ones((self.batch_size, 1), dtype=np.float32)
         dummy = np.zeros((self.batch_size, 1), dtype=np.float32)   # dummy for gradient penalty
 
+        minibatches_size = self.batch_size * self.critic_iters
+        n_batches = x_train.shape[0] // minibatches_size
+
         epoch = 0
         self.start_train_time = time.time()
         wgan_gp_logger.info("==== START TRAINING ====")
         while not self.need_break:
-            for _ in range(self.critic_iters):
-                # ==== Train Critic ====
+            np.random.shuffle(self.x_train)
+            for i in range(n_batches):
+                critic_minibatches = self.x_train[i * minibatches_size: (i + 1) * minibatches_size]
+                for j in range(self.critic_iters):
+                    # ==== Train Critic ====
 
-                # random batch of images
-                idx = np.random.randint(0, self.x_train.shape[0], self.batch_size)
-                imgs = self.x_train[idx]
+                    # random batch of images
+                    image_batch = critic_minibatches[j * self.batch_size: (j + 1) * self.batch_size]
+                    # generated noise
+                    noise = np.random.normal(0, 1, (self.batch_size, self.latent_dim))
 
-                # generated noise
-                noise = np.random.normal(0, 1, (self.batch_size, self.latent_dim))
+                    # Train critic
+                    try:
+                        critic_loss = self.critic_model.train_on_batch([image_batch, noise], [valid, fake, dummy])
+                    except Exception as e:
+                        wgan_gp_logger.error("Exception while training critic: %s" % e)
 
-                # Train critic
+                # ==== Train Generator ====
                 try:
-                    critic_loss = self.critic_model.train_on_batch([imgs, noise], [valid, fake, dummy])
+                    gen_loss = self.generator_model.train_on_batch(noise, valid)
                 except Exception as e:
-                    wgan_gp_logger.error("Exception while training critic: %s" % e)
+                    wgan_gp_logger.error("Exception while training generator: %s" % e)
 
-            # ==== Train Generator ====
-            try:
-                gen_loss = self.generator_model.train_on_batch(noise, valid)
-            except Exception as e:
-                wgan_gp_logger.error("Exception while training generator: %s" % e)
-
-            wgan_gp_logger.info("%d [C loss: %f] [G loss: %f]" % (epoch, critic_loss[0], gen_loss))
-            self.critic_loss_list.append(critic_loss[0])
-            self.generator_loss_list.append(gen_loss)
+                if i % 30 == 0:
+                    wgan_gp_logger.info("[Epoch: %d] [Batch: %d/%d] [C loss: %f] [G loss: %f]"
+                                        % (epoch, i, n_batches, critic_loss[0], gen_loss))
+                self.critic_loss_list.append(critic_loss[0])
+                self.generator_loss_list.append(gen_loss)
 
             if epoch % self.sample_interval == 0:
                 wgan_gp_logger.info("Sample images on %d epoch" % epoch)
