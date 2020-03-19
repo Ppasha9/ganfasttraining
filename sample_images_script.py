@@ -19,8 +19,8 @@ import docopt
 
 import matplotlib.pyplot as plt
 
-from keras.models import load_model, Sequential
-from keras.layers import Dense, Reshape, Conv2D, UpSampling2D, BatchNormalization, Activation
+from keras.models import load_model, Sequential, Model
+from keras.layers import Dense, Reshape, Conv2D, UpSampling2D, BatchNormalization, Activation, Input
 from keras.layers.advanced_activations import LeakyReLU
 
 
@@ -46,7 +46,10 @@ def _get_generator_model(latent_dim):
         model.add(Conv2D(1, kernel_size=4, padding="same"))
         model.add(Activation("tanh"))
 
-        return model
+        noise_input = Input(shape=(latent_dim,))
+        generated_img = model(noise_input)
+
+        return Model(noise_input, generated_img)
 
 
 def _run(opts):
@@ -62,10 +65,9 @@ def _run(opts):
     latent_dim = 100
     model = _get_generator_model(latent_dim)
     model.load_weights(model_path)
-    
 
-    pics_num = opts['--pics-num']
-    pics_in_one_row = opts['--pics-size']
+    pics_num = int(opts['--pics-num'])
+    pics_in_one_row = int(opts['--pics-size'])
     for i in range(pics_num):
         noise = numpy.random.normal(size=(pics_in_one_row * pics_in_one_row, latent_dim))
         gen_imgs = model.predict(noise)
