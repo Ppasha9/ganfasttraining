@@ -1,1 +1,1 @@
-from .logger import wgan_gp_logger
+from .logger import wgan_gp_logger, swae_logger
