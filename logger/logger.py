@@ -16,6 +16,11 @@ config_dict = {
             "formatter": "my_formatter",
             "filename": "train_swae_log.log",
         },
+        "wae_file_handler": {
+            "class": "logging.FileHandler",
+            "formatter": "my_formatter",
+            "filename": "train_wae_log.log",
+        },
         "console_handler": {
             "class": "logging.StreamHandler",
             "formatter": "my_formatter",
@@ -28,6 +33,10 @@ config_dict = {
         },
         "swae_logger": {
             "handlers": ["swae_file_handler", "console_handler"],
+            "level": "INFO",
+        },
+        "wae_logger": {
+            "handlers": ["wae_file_handler", "console_handler"],
             "level": "INFO",
         },
     },
@@ -43,3 +52,4 @@ if os.path.exists("./train_log.log"):
 logging.config.dictConfig(config_dict)
 wgan_gp_logger = logging.getLogger("wgan_gp_logger")
 swae_logger = logging.getLogger("swae_logger")
+wae_logger = logging.getLogger("wae_logger")
